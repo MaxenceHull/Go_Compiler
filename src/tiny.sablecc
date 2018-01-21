@@ -1,0 +1,321 @@
+Package tiny;
+
+Helpers
+  tab   = 9;
+  cr    = 13;
+  lf    = 10;
+  quote = '"';
+  single_quote = ''';
+  back_quote = '`';
+  all = [32 .. 127];
+  letter  = ['a'..'z'] | ['A'..'Z'];
+  not_star = [all - '*'];
+  not_star_slash = [not_star - '/'];
+  eol   = cr | lf | cr lf;
+  not_cr_lf = [all - [cr + lf]];
+
+  digit = ['0'..'9'];
+  octal_digit = ['0'..'7'];
+  hex_digit = ['0'..'9'] | ['A'..'F'] | ['a'..'f'];
+  identifier_char = letter | '_';
+  identifier_char2 = digit | letter | '_';
+
+  escaped_char = '\' (single_quote |'a' | 'b' | 'f' | 'n' | 'r' | 't' | 'v' | '\');
+  rune_char = [all - quote] | escaped_char ;
+  interpreted_string_char = [all - quote] | escaped_char | '\' quote;
+  raw_string_char = [all - back_quote] | lf;
+
+  decimal_integer  = [digit-'0'] digit*;
+  octal_integer = '0' octal_digit*;
+  hexa_integer = '0' ('x' | 'X') hex_digit+;
+
+  complete_float = digit+ '.' digit*;
+  r_float = '.' digit+;
+
+  rune_lit = single_quote rune_char single_quote;
+  interpreted_string = quote interpreted_string_char* quote;
+  raw_string = back_quote raw_string_char* back_quote;
+  short_comment = '//' not_cr_lf* eol?;
+  long_comment =
+        '/*' not_star* '*'+ (not_star_slash not_star* '*'+)* '/';
+
+Tokens
+  blank = ' ' | tab;
+  eol   = cr | lf | cr lf;
+  semicolon = ';';
+
+  break = 'break';
+  case = 'case';
+  chan = 'chan';
+  const = 'const';
+  continue = 'continue';
+  default = 'default';
+  defer = 'defer';
+  fallthrough = 'fallthrough';
+  for = 'for';
+  func = 'func';
+  go = 'go';
+  goto = 'goto';
+  import = 'import';
+  interface = 'interface';
+  map = 'map';
+  package = 'package';
+  range = 'range';
+  return = 'return';
+  select = 'select';
+  struct = 'struct';
+  switch = 'switch';
+  type = 'type';
+  var = 'var';
+  if = 'if';
+  else = 'else';
+  print = 'print';
+  println = 'println';
+  append = 'append';
+
+  star  = '*';
+  slash = '/';
+  plus  = '+';
+  minus = '-';
+  l_par = '(';
+  r_par = ')';
+  colon = ':';
+  equal = '=';
+  ampersand = '&';
+  vertical_bar = '|';
+  less = '<';
+  square_bracket_l = '[';
+  square_bracket_r = ']';
+  caret = '^';
+  greater = '>';
+  bracket_l = '{';
+  bracket_r = '}';
+  coma = ',';
+  percent = '%';
+  exclamation = '!';
+  dot = '.';
+
+  plus_equal = '+=';
+  minus_equal = '-=';
+  star_equal = '*=';
+  vert_equal = '|=';
+  caret_equal = '^=';
+  slash_equal = '/=';
+  percent_equal = '%=';
+  plus_plus = '++';
+  minus_minus = '--';
+  colon_equal = ':=';
+  ampersand_equal = '&=';
+  ampersand_caret = '&^';
+  less_or_equal = '<=';
+  less_minus = '<-';
+  less_less = '<<';
+  greater_greater = '>>';
+  greater_or_equal = '>=';
+  logic_and = '&&';
+  logic_equal = '==';
+  logic_not_equal = '!=';
+  logic_or = '||';
+
+  less_less_equal = '<<=';
+  greater_greater_equal = '>>=';
+  three_dots = '...';
+  ampersand_caret_equal = '&^=';
+
+  integer = decimal_integer | octal_integer | hexa_integer;
+  float = complete_float | r_float;
+  rune = rune_lit;
+  string = interpreted_string | raw_string;
+  identifier = identifier_char identifier_char2*;
+  comment = short_comment | long_comment;
+
+Ignored Tokens
+  eol, blank, comment;
+
+Productions
+
+      prog =
+        package_declaration toplvl_decl* ;
+
+      //Single obligatory package declaration
+      package_declaration =
+        package identifier semicolon;
+
+      //Valid top level declarations (type declaration, function declaration, var declaration).
+      toplvl_decl=
+        {func} func_decl|
+        {var} var_decl |
+        {type} type_decl;
+
+      //Function declaration
+      func_decl =
+        {rettype}   func  [funcid]:identifier l_par [arguments]:iden_type_pair? r_par [rettype]:type_t block semicolon|
+        {norettype} func  [funcid]:identifier l_par [arguments]:iden_type_pair? r_par block semicolon;
+
+      iden_type_pair=
+        {many} argument coma iden_type_pair|
+        {one}  argument;
+
+      argument=
+        [names]:identifier_list [type]:type_t;
+
+      statement=
+        {if} if_stmt semicolon|
+        {for}  for_stmt semicolon|
+        {block} block semicolon|
+        {decl} decl|
+        {simple_stmt} simple_stmt semicolon|
+        {switch_stmt} switch_stmt semicolon|
+        {break} break semicolon|
+        {continue} continue semicolon|
+        {return} return expression semicolon|
+        {print} print_stmt semicolon|
+        {println} println_stmt semicolon;
+
+      //Valid low-level declarations
+      decl=
+        {type} type_decl|
+        {var} var_decl;
+
+      simple_stmt=
+        {expression_stmt} expression|
+        {short_var_decl} [identifiers]:identifier colon_equal [expressions]:expression_list|
+        {increment_stmt} increment_stmt|
+        {decrement_stmt} decrement_stmt|
+        {assignment} assignment_stmt;
+
+      assignment_stmt =
+        {assign} [lvalue]:lvalue_list equal [rvalue]:expression_list|
+        {op_assign} [lvalue]:term assign_op [rvalue]:expression;
+
+      print_stmt = print l_par [expressions]:expression_list? r_par;
+      println_stmt = println l_par expression_list? r_par;
+
+      assign_op=
+        {plus_equal} plus_equal|
+        {minus_equal} minus_equal|
+        {vert_equal} vert_equal|
+        {caret_equal} caret_equal|
+        {slash_equal} slash_equal|
+        {star_equal} star_equal|
+        {percent_equal} percent_equal|
+        {ampersand_equal} ampersand_equal|
+        {less_less_equal} less_less_equal|
+        {greater_greater_equal} greater_greater_equal|
+        {ampersand_caret_equal} ampersand_caret_equal;
+
+      lvalue_list=
+        {one} term|
+        {many} term coma lvalue_list;
+
+      increment_stmt= expression plus_plus;
+      decrement_stmt= expression minus_minus;
+
+      type_t=
+        {name} identifier|
+        {slice} square_bracket_l square_bracket_r [type]:type_t |
+        {array} square_bracket_l integer square_bracket_r [type]:type_t|
+        {struct} struct bracket_l field_dcl* bracket_r;
+
+      field_dcl= [identifiers]:identifier_list type_t semicolon;
+
+      var_decl=
+        {one} var var_spec|
+        {many} var l_par var_spec* r_par semicolon;
+
+      var_spec=
+        {expression_only} identifier_list equal expression_list semicolon|
+        {type_and_expression} identifier_list [type]:type_t equal expression_list semicolon|
+        {type_only} identifier_list [type]:type_t semicolon;
+
+      type_decl=
+        {one} type type_spec|
+        {many} type l_par type_spec* r_par semicolon;
+
+      type_spec= [name]:identifier_list [typeid]:type_t semicolon;
+
+      identifier_list=
+        {one} identifier|
+        {many} identifier coma identifier_list;
+
+      expression_list =
+        {one} expression|
+        {many} expression coma expression_list;
+
+      block= bracket_l statement* bracket_r;
+
+      for_stmt =
+        {infinite_for} for block|
+        {for_cond} for expression block|
+        {for_clause} for [init_stmt]:simple_stmt? semicolon [condition]:expression? [second]:semicolon [post_stmt]:simple_stmt? block;
+
+      switch_stmt=
+        switch if_opt_expr? [condition]:expression? bracket_l switch_body* bracket_r;
+
+      switch_body =
+        {case} case expression_list colon statement*|
+        {default} default colon statement*;
+
+      if_stmt = if if_opt_expr? expression block else_stmt?;
+      if_opt_expr= simple_stmt semicolon;
+      else_stmt=
+        {elif} else if_stmt |
+        {else} else block;
+
+      expression =
+        {or_exp} expression logic_or expr1|
+        {expr1} expr1;
+      expr1    =
+        {and_exp} expr1 logic_and expr2|
+        {expr2} expr2;
+      expr2   =
+        {rel_op} expr2 rel_op expr3|
+        {expr3} expr3;
+      expr3=
+        {add_op} expr3 add_op expr4|
+        {expr4} expr4;
+      expr4 =
+        {mul_op} expr4 mul_op expr5|
+        {expr5} expr5;
+      expr5 =
+        {unary_op} unary_op term |
+        {term} term;
+      term =
+        {operand} operand|
+        {par_expr} l_par expression r_par|
+        // As mentioned in the specifications, casts will appear as function calls
+        {funccall} term l_par expression_list? r_par|
+        {array_access}  term square_bracket_l expression? square_bracket_r|
+        {select} term dot identifier|
+        {append} append l_par [appendident]:expression coma [appendval]:expression r_par;
+      operand =
+        {identifier} identifier |
+        {int} integer |
+        {float} float|
+        {rune} rune|
+        {string} string;
+      add_op =
+        {plus} plus|
+        {minus} minus|
+        {bit_or} vertical_bar|
+        {bit_xor} caret;
+      rel_op=
+        {logic_equal} logic_equal|
+        {logic_not_equal}logic_not_equal|
+        {logic_less} less|
+        {logic_less_equal} less_or_equal|
+        {logic_greater} greater|
+        {logic_greater_equal} greater_or_equal;
+      mul_op =
+        {mult}star|
+        {divd}slash|
+        {remain}percent|
+        {left_shift} less_less|
+        {right_shift} greater_greater|
+        {bit_and} ampersand|
+        {bit_and_not} ampersand_caret;
+      unary_op =
+        {unary_plus} plus|
+        {unary_minus} minus|
+        {unary_not}exclamation|
+        {unary_xor} caret;

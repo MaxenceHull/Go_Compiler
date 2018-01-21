@@ -1,0 +1,443 @@
+Package tiny;
+
+Helpers
+  tab   = 9;
+  cr    = 13;
+  lf    = 10;
+  quote = '"';
+  single_quote = ''';
+  back_quote = '`';
+  all = [0 .. 0xFFFF];
+  letter  = ['a'..'z'] | ['A'..'Z'];
+  eol   = cr | lf | cr lf;
+
+  not_cr_lf = [all - [cr + lf]];
+  not_star = [all - '*'];
+  not_star_slash = [not_star - '/'];
+
+  digit = ['0'..'9'];
+  octal_digit = ['0'..'7'];
+  hex_digit = ['0'..'9'] | ['A'..'F'] | ['a'..'f'];
+  identifier_char = letter | '_';
+  identifier_char2 = digit | letter | '_';
+
+  escaped_char = '\' (single_quote |'a' | 'b' | 'f' | 'n' | 'r' | 't' | 'v' | '\');
+  rune_char = [all - quote] | escaped_char ;
+  interpreted_string_char = [all - quote] | escaped_char | '\' quote;
+  raw_string_char = [all - back_quote] | lf;
+
+  decimal_integer  = [digit-'0'] digit*;
+  octal_integer = '0' octal_digit*;
+  hexa_integer = '0' ('x' | 'X') hex_digit+;
+
+  complete_float = digit+ '.' digit*;
+  r_float = '.' digit+;
+
+  rune_lit = single_quote rune_char single_quote;
+  interpreted_string = quote interpreted_string_char* quote;
+  raw_string = back_quote raw_string_char* back_quote;
+  short_comment = '//' not_cr_lf* eol?;
+  long_comment = '/*' not_star* '*'+ (not_star_slash not_star* '*'+)* '/';
+
+Tokens
+  blank = ' ' | tab;
+  eol   = cr | lf | cr lf;
+  semicolon = ';';
+
+  break = 'break';
+  case = 'case';
+  chan = 'chan';
+  const = 'const';
+  continue = 'continue';
+  default = 'default';
+  defer = 'defer';
+  fallthrough = 'fallthrough';
+  for = 'for';
+  func = 'func';
+  go = 'go';
+  goto = 'goto';
+  import = 'import';
+  interface = 'interface';
+  map = 'map';
+  package = 'package';
+  range = 'range';
+  return = 'return';
+  select = 'select';
+  struct = 'struct';
+  switch = 'switch';
+  type = 'type';
+  var = 'var';
+  if = 'if';
+  else = 'else';
+  print = 'print';
+  println = 'println';
+  append = 'append';
+
+  star  = '*';
+  slash = '/';
+  plus  = '+';
+  minus = '-';
+  l_par = '(';
+  r_par = ')';
+  colon = ':';
+  equal = '=';
+  ampersand = '&';
+  vertical_bar = '|';
+  less = '<';
+  square_bracket_l = '[';
+  square_bracket_r = ']';
+  caret = '^';
+  greater = '>';
+  bracket_l = '{';
+  bracket_r = '}';
+  coma = ',';
+  percent = '%';
+  exclamation = '!';
+  dot = '.';
+
+  plus_equal = '+=';
+  minus_equal = '-=';
+  star_equal = '*=';
+  vert_equal = '|=';
+  caret_equal = '^=';
+  slash_equal = '/=';
+  percent_equal = '%=';
+  plus_plus = '++';
+  minus_minus = '--';
+  colon_equal = ':=';
+  ampersand_equal = '&=';
+  ampersand_caret = '&^';
+  less_or_equal = '<=';
+  less_minus = '<-';
+  less_less = '<<';
+  greater_greater = '>>';
+  greater_or_equal = '>=';
+  logic_and = '&&';
+  logic_equal = '==';
+  logic_not_equal = '!=';
+  logic_or = '||';
+
+  less_less_equal = '<<=';
+  greater_greater_equal = '>>=';
+  three_dots = '...';
+  ampersand_caret_equal = '&^=';
+
+  integer = decimal_integer | octal_integer | hexa_integer;
+  float = complete_float | r_float;
+  rune = rune_lit;
+  string = interpreted_string | raw_string;
+  identifier = identifier_char identifier_char2*;
+  comment = short_comment | long_comment;
+
+Ignored Tokens
+  eol, blank, comment;
+
+Productions
+
+      prog {->program}=
+        package_declaration toplvl_decl* {-> New program (package_declaration.package_dcl, [toplvl_decl.toplvl_dcl])};
+
+      //Single obligatory package declaration
+      package_declaration {->package_dcl} =
+        package identifier semicolon? {-> New package_dcl(identifier)};
+
+      //Valid top level declarations (type declaration, function declaration, var declaration).
+      toplvl_decl{-> toplvl_dcl} =
+        {func} func_decl {-> New toplvl_dcl.func(func_decl.func_dcl)}|
+        {var} var_decl {-> New toplvl_dcl.var(var_decl.var_dcl_list)}|
+        {type} type_decl {-> New toplvl_dcl.type(type_decl.type_dcl_list)};
+
+      //Function declaration
+      func_decl {-> func_dcl} =
+        {rettype}   func  [funcid]:identifier l_par [arguments]:iden_type_pair? r_par [rettype]:type_t block semicolon? {-> New func_dcl(funcid, [arguments.argument], rettype.type_t, block)}|
+        {norettype} func  [funcid]:identifier l_par [arguments]:iden_type_pair? r_par block semicolon? {-> New func_dcl(funcid, [arguments.argument], Null, block)};
+
+      iden_type_pair{->argument*} =
+        {many} argument coma iden_type_pair{->[argument.argument, iden_type_pair.argument]} |
+        {one}  argument{->[argument.argument]};
+
+      argument {->argument}=
+        [names]:identifier_list [type]:type_t{->New argument([names.identifier], type.type_t)};
+
+      var_decl {->var_dcl_list}=
+          {one} var var_spec {->New var_dcl_list([var_spec.var_dcl])}|
+          {many} var l_par var_spec* r_par semicolon?{->New var_dcl_list([var_spec.var_dcl])};
+
+      var_spec{-> var_dcl} =
+          {expression_only} identifier_list equal expression_list semicolon{->New var_dcl([identifier_list.identifier], Null, [expression_list.expression])}|
+          {type_and_expression} identifier_list [type]:type_t equal expression_list semicolon {-> New var_dcl([identifier_list.identifier], type.type_t, [expression_list.expression])}|
+          {type_only} identifier_list [type]:type_t semicolon? {-> New var_dcl([identifier_list.identifier], type.type_t, [])};
+
+      type_decl {->type_dcl_list}=
+          {one} type type_spec {->New type_dcl_list([type_spec.type_dcl])}|
+          {many} type l_par type_spec* r_par semicolon?{->New type_dcl_list([type_spec.type_dcl])};
+
+      type_spec{->type_dcl} = [name]:identifier [typeid]:type_t semicolon? {-> New type_dcl(name, typeid.type_t)};
+
+      statement{->statement} =
+        {if} if_stmt semicolon?{-> New statement.if_stmt(if_stmt)}|
+        {for}  for_stmt semicolon?{->New statement.for_stmt(for_stmt)}|
+        {block} block semicolon?{->New statement.block_stmt(block)}|
+        {decl} decl {->decl.statement}|
+        {simple_stmt} simple_stmt semicolon{->simple_stmt.statement} |
+        {switch_stmt} switch_stmt semicolon?{->New statement.switch(switch_stmt)}|
+        {break} break semicolon? {->New statement.break()}|
+        {continue} continue semicolon? {->New statement.continue()}|
+        {return} return expression? semicolon{-> New statement.return(expression.expression)}|
+        {print} print_stmt semicolon? {-> print_stmt.statement}|
+        {println} println_stmt semicolon? {-> println_stmt.statement};
+
+      //Valid low-level declarations
+      decl {->statement}=
+        {type} type_decl {-> New statement.type_dcl(type_decl.type_dcl_list)}|
+        {var} var_decl{->New statement.var_dcl(var_decl.var_dcl_list)};
+
+      simple_stmt{->statement} =
+        //{empty} semicolon{-> New statement.empty()}|
+        {expression_stmt} expression {->New statement.expression(expression)}|
+        //{short_var_decl} [identifiers]:identifier_list colon_equal [expressions]:expression_list{-> New statement.short_var_decl([identifiers.identifier], [expressions.expression])}|
+        {short_var_decl} [identifiers]:expression_list colon_equal [expressions]:expression_list{-> New statement.short_var_decl([identifiers.expression], [expressions.expression])}|
+        {increment_stmt} increment_stmt {->increment_stmt.statement}|
+        {decrement_stmt} decrement_stmt {->decrement_stmt.statement}|
+        //{assignment} assignment_stmt {->assignment_stmt.statement}
+        {assign} [lvalue]:expression_list equal [rvalue]:expression_list {-> New statement.assignment([lvalue.expression],[rvalue.expression])}|
+        {op_assign} [lvalue]:expression assign_op [rvalue]:expression {-> New statement.op_assign(lvalue.expression, rvalue.expression, assign_op.assign_operator)};
+
+      //assignment_stmt{->statement} =
+      //  {assign} [lvalue]:expression_list equal [rvalue]:expression_list {-> New statement.assignment([lvalue.expression],[rvalue.expression])}|
+      //  {op_assign} [lvalue]:expression assign_op [rvalue]:expression {-> New statement.op_assign(lvalue.expression, rvalue.expression, assign_op.assign_operator)};
+
+      print_stmt {->statement}= print l_par [expressions]:expression_list? r_par {-> New statement.print([expressions.expression])};
+      println_stmt{->statement} = println l_par expression_list? r_par  {-> New statement.println([expression_list.expression])};
+
+      assign_op {->assign_operator}=
+        {plus_equal} plus_equal{->New assign_operator.plus_equal(plus_equal)}|
+        {minus_equal} minus_equal{->New assign_operator.minus_equal(minus_equal)}|
+        {vert_equal} vert_equal{->New assign_operator.vert_equal(vert_equal)}|
+        {caret_equal} caret_equal{->New assign_operator.caret_equal(caret_equal)}|
+        {slash_equal} slash_equal{->New assign_operator.slash_equal(slash_equal)}|
+        {star_equal} star_equal{->New assign_operator.star_equal(star_equal)}|
+        {percent_equal} percent_equal{->New assign_operator.percent_equal(percent_equal)}|
+        {ampersand_equal} ampersand_equal{->New assign_operator.ampersand_equal(ampersand_equal)}|
+        {less_less_equal} less_less_equal{->New assign_operator.less_less_equal(less_less_equal)}|
+        {greater_greater_equal} greater_greater_equal{->New assign_operator.greater_greater_equal(greater_greater_equal)}|
+        {ampersand_caret_equal} ampersand_caret_equal{->New assign_operator.ampersand_caret_equal(ampersand_caret_equal)};
+
+      /*lvalue_list {->expression*}=
+        {one} lvalue {->[lvalue.expression]}|
+        {many} lvalue coma lvalue_list{->[lvalue.expression, lvalue_list.expression]};
+
+      lvalue {->expression}=
+          //{array_access}  lvalue square_bracket_l expression? square_bracket_r {->New expression.array_access(lvalue.expression, expression.expression)}|
+          {select} lvalue dot identifier {->New expression.select(lvalue.expression, identifier)}|
+          {identifier} identifier {->New expression.identifier(identifier)};*/
+
+      increment_stmt{->statement} = expression plus_plus {-> New statement.inc(expression.expression)};
+      decrement_stmt{->statement} = expression minus_minus{-> New statement.dec(expression.expression)};
+
+      type_t {->type_t}=
+        {name} identifier {-> New type_t.name(identifier)}|
+        {slice} square_bracket_l square_bracket_r [type]:type_t {-> New type_t.slice(type.type_t)} |
+        {array} square_bracket_l integer square_bracket_r [type]:type_t {-> New type_t.array(integer, type.type_t)}|
+        {struct} struct bracket_l field_dcl* bracket_r {-> New type_t.struct([field_dcl.field_dcl])};
+
+      field_dcl{-> field_dcl} = [identifiers]:identifier_list type_t semicolon {-> New field_dcl([identifiers.identifier], type_t.type_t)};
+
+      identifier_list{->identifier*} =
+        {one} identifier {->[identifier]}|
+        {many} identifier coma identifier_list{->[identifier, identifier_list.identifier]};
+
+      expression_list{->expression*} =
+        {one} expression {->[expression.expression]}|
+        {many} expression coma expression_list {->[expression.expression, expression_list.expression]};
+
+      block{->block} = bracket_l statement* bracket_r{-> New block([statement.statement])};
+
+      for_stmt{->for_stmt} =
+        {infinite_for} for block {-> New for_stmt(Null, Null, Null, block.block)}|
+        {for_cond} for expression block {-> New for_stmt(Null, expression.expression, Null, block.block)}|
+        {for_clause} for [init_stmt]:simple_stmt? semicolon [condition]:expression? [second]:semicolon [post_stmt]:simple_stmt? block
+        {->New for_stmt(init_stmt.statement, condition.expression, post_stmt.statement, block)};
+
+      switch_stmt{->switch_stmt} =
+        switch if_opt_expr? [condition]:expression? bracket_l switch_body* bracket_r
+        {-> New switch_stmt(if_opt_expr.statement, condition.expression, [switch_body.switch_body])};
+
+      switch_body{-> switch_body} =
+        {case} case expression_list colon statement* {-> New switch_body.case([expression_list.expression], [statement.statement])}|
+        {default} default colon statement* {-> New switch_body.default([statement.statement])};
+
+      if_stmt{-> if_stmt} = if if_opt_expr? expression block else_stmt? {-> New if_stmt(if_opt_expr.statement, expression.expression, block.block, else_stmt.else_stmt)};
+      if_opt_expr{-> statement} = simple_stmt semicolon {->simple_stmt.statement};
+      else_stmt{->else_stmt} =
+        {elif} else if_stmt{-> New else_stmt.elif(if_stmt.if_stmt)} |
+        {else} else block {-> New else_stmt.else(block.block)};
+
+      expression{->expression} =
+        {or_exp} expression logic_or expr1 {->New expression.binary(expression.expression, New binary_operator.logic_or(logic_or), expr1.expression)}|
+        {expr1} expr1 {-> expr1.expression};
+      expr1 {->expression}    =
+        {and_exp} expr1 logic_and expr2 {->New expression.binary(expr1.expression, New binary_operator.logic_and(logic_and), expr2.expression)}|
+        {expr2} expr2{-> expr2.expression};
+      expr2 {->expression}    =
+        {rel_op} expr2 rel_op expr3 {->New expression.binary(expr2.expression, rel_op.binary_operator, expr3.expression)}|
+        {expr3} expr3{-> expr3.expression};
+      expr3 {->expression} =
+        {add_op} expr3 add_op expr4 {->New expression.binary(expr3.expression, add_op.binary_operator, expr4.expression)}|
+        {expr4} expr4{-> expr4.expression};
+      expr4 {->expression} =
+        {mul_op} expr4 mul_op expr5 {->New expression.binary(expr4.expression, mul_op.binary_operator, expr5.expression)}|
+        {expr5} expr5{-> expr5.expression};
+      expr5 {->expression} =
+        {unary_op} unary_op expr5{-> New expression.unary(unary_op.unary_operator, expr5.expression)} |
+        {term} term{->term.expression};
+      term {->expression} =
+      	//{unary_op} unary_op term{-> New expression.unary(unary_op.unary_operator, term.expression)}|
+        {operand} operand {->operand.expression}|
+        {par_expr} l_par expression r_par {->New expression.par_expr(expression)}|
+        // As mentioned in the specifications, casts will appear as function calls
+        {funccall} term l_par expression_list? r_par {->New expression.funccall(term.expression,[expression_list.expression])} |
+        {array_access}  term square_bracket_l expression? square_bracket_r {->New expression.array_access(term.expression, expression.expression)}|
+        {select} term dot identifier {->New expression.select(term.expression, identifier)}|
+        {append} append l_par [appendident]:expression coma [appendval]:expression r_par{->New expression.append(appendident.expression, appendval.expression)};
+      operand {->expression} =
+        {identifier} identifier {->New expression.identifier(identifier)} |
+        {int} integer {->New expression.int(integer)} |
+        {float} float {->New expression.float(float)}|
+        {rune} rune {->New expression.rune(rune)}|
+        {string} string{->New expression.string(string)};
+      add_op{->binary_operator} =
+        {plus} plus{->New binary_operator.plus(plus)}|
+        {minus} minus{->New binary_operator.minus(minus)}|
+        {bit_or} vertical_bar{->New binary_operator.bit_or(vertical_bar)}|
+        {bit_xor} caret{->New binary_operator.bit_xor(caret)};
+      rel_op{->binary_operator} =
+        {logic_equal} logic_equal{->New binary_operator.logic_equal(logic_equal)}|
+        {logic_not_equal}logic_not_equal{->New binary_operator.logic_not_equal(logic_not_equal)}|
+        {logic_less} less{->New binary_operator.logic_less(less)}|
+        {logic_less_equal} less_or_equal{->New binary_operator.logic_less_equal(less_or_equal)}|
+        {logic_greater} greater{->New binary_operator.logic_greater(greater)}|
+        {logic_greater_equal} greater_or_equal{->New binary_operator.logic_greater_equal(greater_or_equal)};
+      mul_op{->binary_operator} =
+        {mult}star{->New binary_operator.mult(star)}|
+        {divd}slash{->New binary_operator.divd(slash)} |
+        {remain}percent{->New binary_operator.remain(percent)} |
+        {left_shift} less_less{->New binary_operator.left_shift(less_less)} |
+        {right_shift} greater_greater{->New binary_operator.right_shift(greater_greater)}|
+        {bit_and} ampersand{->New binary_operator.bit_and(ampersand)}|
+        {bit_and_not} ampersand_caret{->New binary_operator.bit_and_not(ampersand_caret)};
+      unary_op{->unary_operator} =
+        {unary_plus} plus{->New unary_operator.plus(plus)}|
+        {unary_minus} minus{->New unary_operator.minus(minus)}|
+        {unary_not}exclamation{->New unary_operator.not(exclamation)}|
+        {unary_xor} caret{->New unary_operator.unary_xor(caret)};
+
+Abstract Syntax Tree
+  program =
+    [package]:package_dcl [dcls]:toplvl_dcl*;
+  package_dcl =
+    [name]:identifier;
+  toplvl_dcl =
+    {type} type_dcl_list|
+    {func} func_dcl |
+    {var} var_dcl_list;
+  type_dcl_list =
+    [dcls]:type_dcl*;
+  type_dcl =
+    [name]:identifier [type]:type_t;
+  func_dcl =
+    [name]:identifier [arguments]:argument* [return_type]:type_t? [block]:block;
+  argument =
+    [name]:identifier* [type]:type_t;
+  block =
+    [statements]:statement*;
+  var_dcl_list =
+    [dcls]:var_dcl*;
+  var_dcl =
+    [names]:identifier* [type]:type_t? [expressions]:expression*;
+  statement =
+    {empty}|
+    {if_stmt} if_stmt|
+    {for_stmt} for_stmt|
+    {type_dcl} type_dcl_list|
+    {var_dcl} var_dcl_list|
+    {return} expression?|
+    {continue}|
+    {break}|
+    {block_stmt} block|
+    {switch} switch_stmt|
+    {expression} expression|
+    {inc} expression|
+    {dec} expression|
+    {short_var_decl} [identifiers]:expression* [expressions]:expression*|
+    {assignment} [lvalue]:expression* [rvalue]:expression*|
+    {op_assign} [lvalue]:expression [rvalue]:expression [op]:assign_operator |
+    {print} [expressions]:expression*|
+    {println}[expressions]:expression*;
+  if_stmt =
+    [opt_stmt]:statement? [condition]:expression block [else]:else_stmt?;
+  else_stmt =
+    {elif} if_stmt |
+    {else} block;
+  for_stmt = [init_stmt]:statement? [condition]:expression? [post_stmt]:statement? block;
+  switch_stmt =
+    [opt_stmt]:statement? [condition]:expression? [body]:switch_body* ;
+  switch_body =
+    {case} [expressions]:expression* [statements]:statement* |
+    {default} [statements]:statement* ;
+  expression =
+    {par_expr} expression|
+    {binary} [l]:expression [op]:binary_operator [r]:expression|
+    {unary} [op]:unary_operator expression|
+    {identifier} identifier |
+    {int} integer |
+    {float} float |
+    {rune} rune |
+    {string} string|
+    {funccall} [name]:expression [args]:expression* |
+    {array_access}  [name]:expression [value]:expression?|
+    {select} [lvalue]:expression [rvalue]:identifier |
+    {append} [to]:expression [value]:expression;
+  type_t =
+    {name} identifier |
+    {slice} [type]:type_t |
+    {array} [length]:integer [type]:type_t |
+    {struct} field_dcl* ;
+  field_dcl = [identifiers]:identifier* type_t;
+  binary_operator =
+    {plus} plus|
+    {minus} minus|
+    {bit_or} vertical_bar|
+    {bit_xor} caret|
+    {logic_equal} logic_equal|
+    {logic_not_equal}logic_not_equal|
+    {logic_or}logic_or|
+    {logic_and}logic_and|
+    {logic_less} less|
+    {logic_less_equal} less_or_equal|
+    {logic_greater} greater|
+    {logic_greater_equal} greater_or_equal|
+    {mult}star|
+    {divd}slash |
+    {remain}percent |
+    {left_shift} less_less |
+    {right_shift} greater_greater|
+    {bit_and} ampersand|
+    {bit_and_not} ampersand_caret;
+  unary_operator =
+    {plus} plus|
+    {minus} minus|
+    {not}exclamation|
+    {unary_xor} caret;
+  assign_operator =
+    {plus_equal} plus_equal|
+    {minus_equal} minus_equal|
+    {vert_equal} vert_equal|
+    {caret_equal} caret_equal|
+    {slash_equal} slash_equal|
+    {star_equal} star_equal|
+    {percent_equal} percent_equal|
+    {ampersand_equal} ampersand_equal|
+    {less_less_equal} less_less_equal|
+    {greater_greater_equal} greater_greater_equal|
+    {ampersand_caret_equal} ampersand_caret_equal;
